@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Wolgay Chope Fight - Versão Avatar Real</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: 10px; background-color: #111; color: #fff; font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; touch-action: none; }
+        #gameCanvas { background-color: #3b2410; border: 4px solid #fff; box-shadow: 0 0 20px #ff00ff; margin-top: 20px; max-width: 95vw; height: auto; }
+        #hud { display: flex; justify-content: space-between; width: 95vw; max-width: 400px; margin-top: 10px; font-size: 13px; font-weight: bold; flex-wrap: wrap; gap: 4px; }
+        .hud-item { background: #222; padding: 6px 8px; border: 2px solid #555; border-radius: 5px; }
+        #pontos { color: #ffeb3b; text-shadow: 0 0 10px #ffeb3b; }
+        #vidas { color: #00e5ff; text-shadow: 0 0 10px #00e5ff; }
+        #nivel { color: #ff00ff; text-shadow: 0 0 10px #ff00ff; }
+        .instructions { margin-top: 15px; text-align: center; font-size: 12px; color: #aaa; width: 95vw; max-width: 400px; }
+        #musicBtn {
+            margin-top: 12px;
+            background: #222;
+            color: #ffeb3b;
+            border: 2px solid #555;
+            border-radius: 5px;
+            padding: 8px 16px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        #musicBtn:hover { border-color: #ffeb3b; }
+
+        /* CONTROLES DE TOQUE (celular) */
+        #mobileControls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 95vw;
+            max-width: 400px;
+            margin-top: 18px;
+            user-select: none;
+        }
+        .dpad {
+            display: grid;
+            grid-template-columns: 48px 48px 48px;
+            grid-template-rows: 48px 48px 48px;
+            gap: 4px;
+        }
+        .dpad button {
+            grid-column: auto;
+            grid-row: auto;
+        }
+        .dpad-up { grid-column: 2; grid-row: 1; }
+        .dpad-left { grid-column: 1; grid-row: 2; }
+        .dpad-down { grid-column: 2; grid-row: 2; }
+        .dpad-right { grid-column: 3; grid-row: 2; }
+        .ctrl-btn {
+            background: #222;
+            color: #fff;
+            border: 2px solid #555;
+            border-radius: 8px;
+            font-size: 20px;
+            touch-action: none;
+        }
+        .ctrl-btn:active { background: #444; border-color: #ffeb3b; }
+        #btnAttack {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: #a9720a;
+            border: 3px solid #f7d67a;
+            font-size: 32px;
+            touch-action: none;
+        }
+        #btnAttack:active { background: #d4a017; }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <div class="hud-item" id="vidas">⚡ ⚡ ⚡</div>
+        <div class="hud-item" id="nivel">FASE 1: MORADA DO OURO</div>
+        <div class="hud-item" id="pontos">PONTOS: 0</div>
+    </div>
+
+    <canvas id="gameCanvas" width="400" height="300"></canvas>
+
+    <button id="musicBtn">🔊 Música</button>
+
+    <div id="mobileControls">
+        <div class="dpad">
+            <button class="ctrl-btn dpad-up" id="btnUp">▲</button>
+            <button class="ctrl-btn dpad-left" id="btnLeft">◀</button>
+            <button class="ctrl-btn dpad-down" id="btnDown">▼</button>
+            <button class="ctrl-btn dpad-right" id="btnRight">▶</button>
+        </div>
+        <button id="btnAttack">🍺</button>
+    </div>
+
+    <div class="instructions">
+        <strong>CONTROLES (PC):</strong> Setas ou W,A,S,D para mover. | <strong>ESPAÇO</strong> para golpear com a caneca de chope.
+        <br>
+        <strong>CONTROLES (CELULAR):</strong> use a seta na tela para mover e o botão 🍺 para golpear.
+        <br><br>
+        <em>AVISO: Certifique-se de que a imagem 'rosto.jpg' está na mesma pasta deste arquivo HTML para o avatar aparecer! Se a imagem não carregar, aparecerá um quadrado preto.</em>
+        <br>
+        <em>Para o rosto de susto ao ser atingido, salve a foto de rosto assustado como 'susto.jpg' na mesma pasta.</em>
+        <br>
+        <em>A música toca automaticamente após o primeiro movimento (os navegadores exigem uma interação antes de liberar o som). Use o botão acima para ligar/desligar.</em>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // CARREGANDO A IMAGEM DO AVATAR
+    const avatarImg = new Image();
+    avatarImg.src = 'rosto.jpg'; // O nome precisa ser exatamente esse!
+
+    // CARREGANDO A IMAGEM DE SUSTO (rosto assustado ao ser atingido)
+    const scaredImg = new Image();
+    scaredImg.src = 'susto.jpg'; // Salve a foto de rosto assustado com esse nome, na mesma pasta!
+
+    let score = 0;
+    let lives = 3;
+    let level = 1;
+    let gameOver = false;
+    let invulnerableTimer = 0;
+    let hitEffectTimer = 0;
+    let frames = 0;
+    let enemies = [];
+    let spawnRate = 60;
+
+    // Aumentei o tamanho (w, h) para 50x50 para o rosto ficar mais visível!
+    const player = { x: 175, y: 125, w: 50, h: 50, speed: 5, swordActive: false, swordTimer: 0, facing: 'right' };
+
+    const keys = {};
+    window.addEventListener('keydown', e => {
+        keys[e.code] = true;
+        startMusic();
+    });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // =========================================================
+    // CONTROLES DE TOQUE (celular) - reaproveitam o mesmo objeto "keys"
+    // =========================================================
+    function bindHoldButton(id, code) {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        const press = (e) => { e.preventDefault(); keys[code] = true; startMusic(); };
+        const release = (e) => { e.preventDefault(); keys[code] = false; };
+        btn.addEventListener('touchstart', press, { passive: false });
+        btn.addEventListener('touchend', release, { passive: false });
+        btn.addEventListener('touchcancel', release, { passive: false });
+        btn.addEventListener('mousedown', press);
+        btn.addEventListener('mouseup', release);
+        btn.addEventListener('mouseleave', release);
+    }
+    bindHoldButton('btnUp', 'ArrowUp');
+    bindHoldButton('btnDown', 'ArrowDown');
+    bindHoldButton('btnLeft', 'ArrowLeft');
+    bindHoldButton('btnRight', 'ArrowRight');
+    bindHoldButton('btnAttack', 'Space');
+
+    // =========================================================
+    // MÚSICA - Trilha estilo "oom-pah" tradicional alemã (MIDI-like)
+    // Gerada via Web Audio API (sem precisar de arquivo externo)
+    // =========================================================
+    const BPM = 148;
+    const eighth = 60 / BPM / 2; // duração de uma colcheia em segundos
+
+    // Melodia (16 colcheias, escala de Sol maior) - estilo polca/oompah
+    const melody = [392.00, 392.00, 493.88, 587.33, 587.33, 493.88, 392.00, 329.63,
+                     392.00, 392.00, 440.00, 493.88, 440.00, 392.00, 369.99, 392.00];
+    // Baixo "oom-pah" (fundamental grave + acorde) acompanhando I - IV - V - I
+    const bass   = [196.00, 146.83, 196.00, 146.83, 196.00, 146.83, 196.00, 146.83,
+                     261.63, 392.00, 261.63, 392.00, 146.83, 220.00, 146.83, 220.00];
+
+    let audioCtx = null;
+    let musicOn = true;
+    let musicStep = 0;
+    let musicInterval = null;
+
+    function playNote(freq, time, dur, type, vol) {
+        if (!freq) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(vol, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(time);
+        osc.stop(time + dur);
+    }
+
+    function startMusic() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (musicInterval) return;
+        musicStep = 0;
+        musicInterval = setInterval(() => {
+            if (!musicOn || gameOver) return;
+            const t = audioCtx.currentTime + 0.03;
+            playNote(melody[musicStep], t, eighth * 0.9, 'square', 0.07);
+            playNote(bass[musicStep], t, eighth * 0.9, 'triangle', 0.12);
+            musicStep = (musicStep + 1) % 16;
+        }, eighth * 1000);
+    }
+
+    document.getElementById('musicBtn').addEventListener('click', () => {
+        musicOn = !musicOn;
+        document.getElementById('musicBtn').innerText = musicOn ? '🔊 Música' : '🔇 Música';
+        startMusic();
+    });
+
+    // =========================================================
+    // GRITO DE SUSTO - "Ai Tchomano" via Web Speech API
+    // =========================================================
+    function playScream() {
+        try {
+            if (!('speechSynthesis' in window)) return;
+            speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance('Ai Tchomano!');
+            u.lang = 'pt-BR';
+            u.rate = 1.15;
+            u.pitch = 1.7;
+            u.volume = 1;
+            speechSynthesis.speak(u);
+        } catch (e) { /* fala não suportada neste navegador */ }
+    }
+
+    // =========================================================
+    // DESENHO DO JOGADOR E DA CANECA DE CHOPE
+    // =========================================================
+    function drawPlayer() {
+        if (invulnerableTimer > 0 && frames % 10 < 5) return; // Efeito piscando de dano
+
+        const usarRostoDeSusto = hitEffectTimer > 0 && scaredImg.complete && scaredImg.naturalWidth !== 0;
+
+        if (usarRostoDeSusto) {
+            // TROCA IMEDIATA PARA O ROSTO ASSUSTADO AO SER ATINGIDO!
+            ctx.drawImage(scaredImg, player.x, player.y, player.w, player.h);
+        } else if (avatarImg.complete && avatarImg.naturalWidth !== 0) {
+            // DESENHA O ROSTO DA FOTO NORMAL NO LUGAR DO QUADRADO!
+            ctx.drawImage(avatarImg, player.x, player.y, player.w, player.h);
+        } else {
+            // Se a imagem não carregar, desenha um quadrado preto como aviso
+            ctx.fillStyle = '#000';
+            ctx.fillRect(player.x, player.y, player.w, player.h);
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px Arial';
+            ctx.fillText('ERRO IMG', player.x, player.y + 25);
+        }
+
+        // Efeito de susto (reforço visual / substitui a foto de susto caso ela ainda não tenha carregado)
+        if (hitEffectTimer > 0 && !usarRostoDeSusto) {
+            ctx.fillStyle = 'rgba(255,0,0,0.18)';
+            ctx.fillRect(player.x, player.y, player.w, player.h);
+            drawScaredEyes(player.x, player.y, player.w, player.h);
+        }
+
+        // Golpe com a Caneca de Chope (substitui a espada)
+        if (player.swordActive) {
+            let rect = getSwordRect();
+            drawBeerMug(rect, player.facing);
+        }
+    }
+
+    function drawScaredEyes(px, py, pw, ph) {
+        const eyeY = py + ph * 0.40;
+        const eyeRX = pw * 0.14;
+        const eyeRY = ph * 0.13;
+        [-0.18, 0.18].forEach(off => {
+            const ex = px + pw / 2 + off * pw;
+            ctx.save();
+
+            // Esclera vermelha (arregalada)
+            ctx.beginPath();
+            ctx.ellipse(ex, eyeY, eyeRX, eyeRY, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#ff3b3b';
+            ctx.fill();
+            ctx.strokeStyle = '#7a0000';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Veias saltadas (bloodshot)
+            ctx.strokeStyle = 'rgba(122,0,0,0.85)';
+            ctx.lineWidth = 0.8;
+            for (let i = 0; i < 4; i++) {
+                const ang = -Math.PI / 2 + (i - 1.5) * 0.55;
+                ctx.beginPath();
+                ctx.moveTo(ex, eyeY);
+                ctx.lineTo(ex + Math.cos(ang) * eyeRX * 0.95, eyeY + Math.sin(ang) * eyeRY * 0.95);
+                ctx.stroke();
+            }
+
+            // Pupila preta pequena e arregalada
+            ctx.beginPath();
+            ctx.arc(ex, eyeY, eyeRY * 0.32, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+
+            // Brilho
+            ctx.beginPath();
+            ctx.arc(ex - eyeRY * 0.15, eyeY - eyeRY * 0.15, eyeRY * 0.12, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+
+            ctx.restore();
+        });
+    }
+
+    function getSwordRect() {
+        if (player.facing === 'right') return { x: player.x + player.w, y: player.y + 15, w: 40, h: 20 };
+        if (player.facing === 'left') return { x: player.x - 40, y: player.y + 15, w: 40, h: 20 };
+        if (player.facing === 'up') return { x: player.x + 15, y: player.y - 40, w: 20, h: 40 };
+        if (player.facing === 'down') return { x: player.x + 15, y: player.y + player.h, w: 20, h: 40 };
+        return { x: 0, y: 0, w: 0, h: 0 };
+    }
+
+    function drawBeerMug(rect, facing) {
+        ctx.save();
+        const cx = rect.x + rect.w / 2;
+        const cy = rect.y + rect.h / 2;
+        ctx.translate(cx, cy);
+        let angle = 0;
+        if (facing === 'right') angle = 0;
+        else if (facing === 'left') angle = Math.PI;
+        else if (facing === 'up') angle = -Math.PI / 2;
+        else if (facing === 'down') angle = Math.PI / 2;
+        ctx.rotate(angle);
+
+        const long = Math.max(rect.w, rect.h);  // eixo do golpe (comprimento da caneca)
+        const thick = Math.min(rect.w, rect.h); // espessura perpendicular
+
+        // Eixo local: -long/2 = lado da mão/alça | +long/2 = boca/espuma (ponta do golpe)
+        const handleX = -long / 2;
+        const mouthX = long / 2 - thick * 0.35; // deixa espaço para a espuma transbordar
+        const baseHalf = thick * 0.30;  // corpo mais estreito perto da mão
+        const mouthHalf = thick * 0.52; // caneca alarga na boca (formato de stein)
+
+        // --- Corpo de vidro (trapézio alargando até a boca) ---
+        const grad = ctx.createLinearGradient(handleX, 0, mouthX, 0);
+        grad.addColorStop(0, '#a9720a');
+        grad.addColorStop(0.5, '#e8a827');
+        grad.addColorStop(1, '#f7d67a');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(handleX, -baseHalf);
+        ctx.lineTo(mouthX, -mouthHalf);
+        ctx.lineTo(mouthX, mouthHalf);
+        ctx.lineTo(handleX, baseHalf);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#3e2200';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Linhas horizontais do líquido (nível de chope)
+        ctx.strokeStyle = 'rgba(120,70,0,0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(handleX + 2, -baseHalf * 0.55);
+        ctx.lineTo(mouthX - 2, -mouthHalf * 0.6);
+        ctx.stroke();
+
+        // Bolhinhas de gás subindo no copo
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        [[0.3, -0.25], [0.55, 0.35], [0.75, -0.5], [0.4, 0.55]].forEach(([fx, fy]) => {
+            const bx = handleX + (mouthX - handleX) * fx;
+            const by = fy * thick * 0.35;
+            ctx.beginPath();
+            ctx.arc(bx, by, 1, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Brilho de vidro (reflexo diagonal)
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(handleX + 3, -baseHalf * 0.65);
+        ctx.lineTo(mouthX - 3, -mouthHalf * 0.7);
+        ctx.stroke();
+
+        // --- Espuma transbordando na boca ---
+        const foamCX = mouthX + thick * 0.10;
+        ctx.fillStyle = '#fffdf5';
+        [[-mouthHalf * 0.75, 0.60], [-mouthHalf * 0.15, 0.72], [mouthHalf * 0.45, 0.62], [mouthHalf * 0.85, 0.50]].forEach(([oy, scale]) => {
+            ctx.beginPath();
+            ctx.arc(foamCX, oy, thick * scale * 0.42, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.strokeStyle = '#e4d9b8';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Gotas de espuma escorrendo pela lateral do copo
+        ctx.fillStyle = '#fffdf5';
+        ctx.beginPath(); ctx.arc(mouthX - thick * 0.05, -mouthHalf - thick * 0.12, thick * 0.12, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(mouthX - thick * 0.05, mouthHalf + thick * 0.12, thick * 0.12, 0, Math.PI * 2); ctx.fill();
+
+        // --- Alça em formato de "D" (grossa, com brilho) ---
+        ctx.strokeStyle = '#3e2200';
+        ctx.lineWidth = thick * 0.24;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(handleX - thick * 0.05, 0, thick * 0.42, -Math.PI * 0.47, Math.PI * 0.47);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = thick * 0.08;
+        ctx.beginPath();
+        ctx.arc(handleX - thick * 0.05, 0, thick * 0.42, -Math.PI * 0.38, -Math.PI * 0.05);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    function spawnEnemy() {
+        const size = 30;
+        let ex, ey;
+        if (Math.random() < 0.5) {
+            ex = Math.random() < 0.5 ? 0 - size : canvas.width + size;
+            ey = Math.random() * canvas.height;
+        } else {
+            ex = Math.random() * canvas.width;
+            ey = Math.random() < 0.5 ? 0 - size : canvas.height + size;
+        }
+        let speed = 1.5 + (level * 0.5);
+        enemies.push({ x: ex, y: ey, w: size, h: size, speed: speed, color: '#8d6e63' });
+    }
+
+    function drawEnemies() {
+        enemies.forEach(e => {
+            ctx.fillStyle = e.color;
+            ctx.fillRect(e.x, e.y, e.w, e.h);
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(e.x + 5, e.y + 5, 5, 5);
+            ctx.fillRect(e.x + 20, e.y + 5, 5, 5);
+        });
+    }
+
+    function update() {
+        if (gameOver) return;
+        frames++;
+        if (invulnerableTimer > 0) invulnerableTimer--;
+        if (hitEffectTimer > 0) hitEffectTimer--;
+
+        if (keys['ArrowUp'] || keys['KeyW']) { player.y -= player.speed; player.facing = 'up'; }
+        if (keys['ArrowDown'] || keys['KeyS']) { player.y += player.speed; player.facing = 'down'; }
+        if (keys['ArrowLeft'] || keys['KeyA']) { player.x -= player.speed; player.facing = 'left'; }
+        if (keys['ArrowRight'] || keys['KeyD']) { player.x += player.speed; player.facing = 'right'; }
+
+        if (player.x < 0) player.x = 0;
+        if (player.x + player.w > canvas.width) player.x = canvas.width - player.w;
+        if (player.y < 0) player.y = 0;
+        if (player.y + player.h > canvas.height) player.y = canvas.height - player.h;
+
+        if (keys['Space'] && player.swordTimer === 0) {
+            player.swordActive = true;
+            player.swordTimer = 15;
+        }
+        if (player.swordTimer > 0) player.swordTimer--;
+        else player.swordActive = false;
+
+        if (score >= 20 && level === 1) { level = 2; spawnRate = 40; canvas.style.backgroundColor = '#5d4037'; document.getElementById('nivel').innerText = 'FASE 2: CHAPADA'; }
+        if (score >= 50 && level === 2) { level = 3; spawnRate = 25; canvas.style.backgroundColor = '#455a64'; document.getElementById('nivel').innerText = 'FASE 3: PEDRA 90'; }
+
+        if (frames % spawnRate === 0) spawnEnemy();
+
+        let enemiesTouchingPlayer = 0;
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let e = enemies[i];
+            if (e.x < player.x) e.x += e.speed;
+            if (e.x > player.x) e.x -= e.speed;
+            if (e.y < player.y) e.y += e.speed;
+            if (e.y > player.y) e.y -= e.speed;
+
+            let swordRect = { x: 0, y: 0, w: 0, h: 0 };
+            if (player.swordActive) {
+                swordRect = getSwordRect();
+
+                if (swordRect.x < e.x + e.w && swordRect.x + swordRect.w > e.x && swordRect.y < e.y + e.h && swordRect.y + swordRect.h > e.y) {
+                    enemies.splice(i, 1);
+                    score++;
+                    document.getElementById('pontos').innerText = 'PONTOS: ' + score;
+                    continue;
+                }
+            }
+            if (player.x < e.x + e.w && player.x + player.w > e.x && player.y < e.y + e.h && player.y + player.h > e.y) {
+                enemiesTouchingPlayer++;
+            }
+        }
+
+        if (enemiesTouchingPlayer >= 2 && invulnerableTimer === 0) {
+            lives--;
+            let livesHud = '';
+            for (let l = 0; l < lives; l++) livesHud += '⚡ ';
+            document.getElementById('vidas').innerText = livesHud;
+            invulnerableTimer = 60;
+            hitEffectTimer = 45;
+            playScream();
+            enemies.forEach(e => { e.x += (e.x < player.x) ? -50 : 50; e.y += (e.y < player.y) ? -50 : 50; });
+            if (lives <= 0) gameOver = true;
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawPlayer();
+        drawEnemies();
+
+        if (gameOver) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ff0000';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 10);
+            ctx.fillStyle = '#fff';
+            ctx.font = '13px Arial';
+            ctx.fillText('Pressione F5 para reiniciar', canvas.width / 2, canvas.height / 2 + 20);
+            ctx.textAlign = 'left';
+        }
+    }
+
+    function loop() { update(); draw(); requestAnimationFrame(loop); }
+    loop();
+</script>
+</body>
+</html>
